@@ -1,0 +1,67 @@
+version: "3.3"
+
+networks:
+  proxy-backend:
+    external: true 
+  default:
+    driver: bridge
+    attachable: true
+
+volumes:
+  wg-access-server-data:
+    driver: local
+
+services:
+  wg-access-server:
+    image: place1/wg-access-server
+    #cant run these in swarm mode without adding docker.socks which is not greate for security
+    #command:
+    #  - "--cap-add=NET_ADMIN"
+    #  - "--device=/dev/net/tun:/dev/net/tun"
+    environment:
+      - CONFIG=/config.yaml
+        #- ADMIN_USERNAME=
+        #- ADMIN_PASSWORD=
+      - LOG_LEVEL=error 
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - "wg-access-server-data:/data"
+      - "./config.yaml:/config.yaml" # if you have a custom config file
+    ports:
+     #- "8000:8000/tcp"
+      - "51823:51820/udp"
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    #restart: always
+    networks:
+      - proxy-backend 
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wg-access-server-dev.rule=Host(`us-west-2.dev.example.com`)"
+      - "traefik.http.services.wg-access-server-dev-web.loadbalancer.server.port=8000"
+      - "traefik.http.routers.wg-access-server-dev.entrypoints=websecure"
+      - "traefik.http.routers.wg-access-server-dev.tls.certresolver=letsencrypt"
+      - "traefik.docker.network=proxy-backend"
+        #- "traefik.http.middlewares.wg-access-server-dev-redirectregex.replacepathregex.regex=^/signin"
+        #- "traefik.http.middlewares.wg-access-server-dev-redirectregex.replacepathregex.replacement=/signin/0"
+        #- "traefik.http.middlewares.wg-access-server-dev-auth-redirect.chain.middlewares=traefik-auth@docker,wg-access-server-dev-redirectregex@docker"
+      - "traefik.http.routers.wg-access-server-dev.middlewares=wg-access-server-auth-redirect@docker"
+      #- "traefik.http.routers.wg-access-server-dev.middlewares=traefik-auth@docker"
+      #- "traefik.http.routers.wg-access-server-dev.middlewares=wg-access-server-dev-redirectregex@docker"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 50M
+        reservations:
+          cpus: '0.05'
+          memory: 5M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+      
